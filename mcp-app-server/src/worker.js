@@ -91,8 +91,37 @@ export class MCPSessionManager
       this.lastCleanup = now;
     }
 
-    // Handle the MCP request
-    const response = await session.transport.handleRequest(request);
+    // Handle the MCP request.
+    // Clients that accept text/event-stream (e.g. Claude Desktop) use SSE as usual.
+    // Clients that don't (e.g. Claude.ai) get a plain JSON response via the SDK's
+    // enableJsonResponse code path. We toggle the flag per-request and patch the
+    // Accept header so the SDK's validation passes.
+    const acceptHeader = request.headers.get("accept") || "";
+    const wantsSSE = acceptHeader.includes("text/event-stream");
+    let response;
+
+    if (wantsSSE)
+    {
+      response = await session.transport.handleRequest(request);
+    }
+    else
+    {
+      const headers = new Headers(request.headers);
+      headers.set("accept", "application/json, text/event-stream");
+
+      const patchedRequest = new Request(request, { headers });
+
+      session.transport._enableJsonResponse = true;
+
+      try
+      {
+        response = await session.transport.handleRequest(patchedRequest);
+      }
+      finally
+      {
+        session.transport._enableJsonResponse = false;
+      }
+    }
 
     return withCors(response);
   }
