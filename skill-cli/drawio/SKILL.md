@@ -178,6 +178,7 @@ Consult `references/xml-reference.md` for common styles, style properties, edge 
 - **Leave room for arrowheads** — at least 20px of straight segment before the target
 - Add explicit **waypoints** when edges would overlap
 - Align all nodes to a grid (multiples of 10)
+- **Edge labels**: Do NOT wrap edge labels in HTML markup to reduce font size. The default font size for edge labels is already 11px (vs 12px for vertices), so they are already smaller. Just set the `value` attribute directly.
 
 See `references/xml-reference.md` for full edge routing and container guidance.
 

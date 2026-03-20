@@ -120,6 +120,7 @@ const tools =
       "(2) swimlane style (style=\"swimlane;startSize=30;\") for labeled containers with a title bar - use when the container needs visual borders/headers or when the container itself has connections; " +
       "(3) any shape can be a container by adding container=1 to its style, but also add pointerEvents=0 unless the container itself needs to be connectable. " +
       "Always use pointerEvents=0 on container styles that should not capture connections being rewired between children. " +
+      "EDGE LABELS: Do NOT wrap edge labels in HTML markup to reduce font size. The default font size for edge labels is already 11px (vs 12px for vertices), so they are already smaller. Just set the value attribute directly. " +
       "LAYOUT: Align nodes to a grid (multiples of 10). Use consistent spacing (e.g., 200px horizontal, 120px vertical between nodes). " +
       "DARK MODE COLORS: To enable dark mode color adaptation, the mxGraphModel element must include adaptiveColors=\"auto\". " +
       "strokeColor, fillColor, and fontColor default to 'default', which renders as black in light theme and white in dark theme. " +
