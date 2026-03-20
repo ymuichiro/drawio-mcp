@@ -322,12 +322,18 @@ export function processAppBundle(raw)
  * Create a new MCP server instance with tools + UI resource.
  *
  * @param {string} html - The pre-built, self-contained HTML string.
- * @param {object} [serverOptions] - Optional McpServer constructor options (e.g. jsonSchemaValidator).
+ * @param {object} [options] - Options.
+ * @param {string} [options.domain] - Widget domain for ChatGPT sandbox rendering (e.g. "https://mcp.draw.io").
+ * @param {object} [options.serverOptions] - Optional McpServer constructor options (e.g. jsonSchemaValidator).
  * @returns {McpServer}
  */
-export function createServer(html, serverOptions = {})
+export function createServer(html, options = {})
 {
-  const { previewService, ...mcpServerOptions } = serverOptions;
+  const normalizedOptions = typeof options === "object" && options !== null
+    ? options
+    : { serverOptions: options };
+  const { domain, previewService, serverOptions = {} } = normalizedOptions;
+  const mcpServerOptions = serverOptions;
   const server = new McpServer(
     { name: "drawio-mcp-app", version: "1.0.0" },
     mcpServerOptions,
@@ -376,7 +382,12 @@ export function createServer(html, serverOptions = {})
         idempotentHint: true,
         openWorldHint: false,
       },
-      _meta: { ui: { resourceUri } },
+      _meta:
+      {
+        ui: { resourceUri },
+        "openai/toolInvocation/invoking": "Creating diagram...",
+        "openai/toolInvocation/invoked": "Diagram ready.",
+      },
     },
     async function({ xml }, extra)
     {
@@ -548,6 +559,7 @@ export function createServer(html, serverOptions = {})
             {
               ui:
               {
+                ...(domain ? { domain } : {}),
                 csp:
                 {
                   resourceDomains: ["https://viewer.diagrams.net"],

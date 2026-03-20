@@ -4,6 +4,10 @@ export const INVALID_DIAGRAM_XML_MESSAGE =
 /**
  * Extracts raw draw.io XML from raw XML or common JSON-wrapped text payloads.
  *
+ * Some MCP hosts (e.g. ChatGPT) wrap the XML string in a JSON envelope like
+ * {"text": "<mxGraphModel ...>"} before sending it. This function peels off
+ * up to 4 wrapper layers so the server and client can handle these payloads.
+ *
  * @param {unknown} input
  * @returns {string|null}
  */

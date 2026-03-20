@@ -123,7 +123,13 @@ async function startStreamableHTTPServer()
 
   async function createSession(req, res)
   {
-    const server = createServer(html, { previewService });
+    const server = createServer(
+      html,
+      {
+        domain: process.env.DOMAIN,
+        previewService,
+      }
+    );
     let transport;
 
     transport = new StreamableHTTPServerTransport(
@@ -237,7 +243,12 @@ async function startStreamableHTTPServer()
 
 async function startStdioServer()
 {
-  await createServer(html).connect(new StdioServerTransport());
+  await createServer(
+    html,
+    {
+      domain: process.env.DOMAIN,
+    }
+  ).connect(new StdioServerTransport());
 }
 
 async function main()

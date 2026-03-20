@@ -60,7 +60,7 @@ export class MCPSessionManager
 
     if (!session)
     {
-      const server = createServer(html);
+      const server = createServer(html, { domain: "https://mcp.draw.io" });
       const transport = new WebStandardStreamableHTTPServerTransport(
       {
         sessionIdGenerator: function() { return sessionId; },
