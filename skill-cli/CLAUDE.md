@@ -24,8 +24,9 @@ Default output is `.drawio` (no export). The user requests export by mentioning 
 - **macOS**: `/Applications/draw.io.app/Contents/MacOS/draw.io`
 - **Linux**: `drawio` (on PATH via snap/apt/flatpak)
 - **Windows**: `"C:\Program Files\draw.io\draw.io.exe"`
+- **WSL2**: `` `/mnt/c/Program Files/draw.io/draw.io.exe` `` (detect via `grep -qi microsoft /proc/version`)
 
-The skill tries `drawio` first, then falls back to the platform-specific path.
+The skill tries `drawio` first, then falls back to the platform-specific path. On WSL2, use `wslpath -w` to convert paths when opening files with `cmd.exe /c start`.
 
 ## Why XML Only?
 
