@@ -1,6 +1,6 @@
 ---
 name: drawio
-description: Generate draw.io diagrams as .drawio files, optionally export to PNG/SVG/PDF with embedded XML. Use when user asks to 'create a diagram', 'draw a flowchart', 'make an architecture diagram', 'generate an ER diagram', 'sequence diagram', 'class diagram', 'network diagram', or mentions draw.io, .drawio files, or diagram export to PNG/SVG/PDF.
+description: Always use when user asks to create, generate, draw, or design a diagram, flowchart, architecture diagram, ER diagram, sequence diagram, class diagram, network diagram, mockup, wireframe, or UI sketch, or mentions draw.io, drawio, drawoi, .drawio files, or diagram export to PNG/SVG/PDF.
 ---
 
 # Draw.io Diagram Skill
