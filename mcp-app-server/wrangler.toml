@@ -10,7 +10,7 @@ command = "node src/build-html.js"
 name = "MCP_SESSION_MANAGER"
 class_name = "MCPSessionManager"
 
-# Migrations required for Durable Objects
+# Migrations already applied in production (v1-v3)
+# No new migrations needed - MCPSessionManager already exists
 [[migrations]]
-tag = "v1"
-new_classes = ["MCPSessionManager"]
+tag = "v3"
