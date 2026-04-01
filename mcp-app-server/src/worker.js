@@ -86,9 +86,11 @@ export class MCPSessionManager
       while (parseInt(sessionId.charAt(0), 16) % NUM_SHARDS !== shardIndex);
     }
 
-    // Get or create session — but only allow POST to create new sessions.
-    // GET requests (SSE streams) without a valid session ID are rejected,
-    // since they must reference an already-established session.
+    // Get or create session.
+    // GET requests (SSE streams) without a valid session must be rejected.
+    // POST requests with an unknown session ID (stale/expired) must return
+    // 404 so the client knows to re-initialize with a fresh session.
+    // Only POST requests WITHOUT a session ID (new connections) create sessions.
     let session = this.sessions.get(sessionId);
     const isNewSession = !session;
 
@@ -98,6 +100,25 @@ export class MCPSessionManager
       {
         this.log(`[sessions] REJECTED GET without valid session id=${sessionId.slice(0, 8)} total=${this.sessions.size}`);
         return withCors(new Response("Session not found. Send a POST to initialize first.", { status: 400 }));
+      }
+
+      // If the client sent a session ID we don't recognize, the session
+      // was cleaned up or lost (e.g. after a deploy). Return 404 per the
+      // MCP spec so the client re-initializes with a fresh session.
+      if (existingSessionId)
+      {
+        this.log(`[sessions] REJECTED stale session id=${sessionId.slice(0, 8)} total=${this.sessions.size}`);
+
+        return withCors(new Response(JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          error: { code: -32001, message: "Session not found" },
+          id: null,
+        }),
+        {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        }));
       }
 
       this.log(`[session-create] domain=${this.env.DOMAIN || "UNDEFINED"} session=${sessionId.slice(0, 8)}`);
@@ -157,6 +178,15 @@ export class MCPSessionManager
       {
         this.log(`[rpc] body-parse-failed session=${sessionId.slice(0, 8)} error=${e.message}`);
       }
+    }
+
+    // DELETE = client explicitly terminating the session. Remove it immediately.
+    if (request.method === "DELETE")
+    {
+      this.log(`[session-delete] session=${sessionId.slice(0, 8)}`);
+      const resp = await session.transport.handleRequest(request);
+      this.sessions.delete(sessionId);
+      return withCors(resp);
     }
 
     // Handle the MCP request.
@@ -263,7 +293,7 @@ export class MCPSessionManager
   cleanupStaleSessions()
   {
     const now = Date.now();
-    const STALE_TIMEOUT = 30 * 60 * 1000;
+    const STALE_TIMEOUT = 4 * 60 * 1000;
     let cleaned = 0;
     const removedIds = [];
 
@@ -274,6 +304,11 @@ export class MCPSessionManager
         const idleMinutes = Math.round((now - session.lastAccess) / 60000);
         const ageMinutes = Math.round((now - session.createdAt) / 60000);
         removedIds.push({ id: id.slice(0, 8), idle: idleMinutes, age: ageMinutes });
+
+        // Close transport and server to release resources
+        try { session.transport.close(); } catch (e) { /* ignore */ }
+        try { session.server.close(); } catch (e) { /* ignore */ }
+
         this.sessions.delete(id);
         cleaned++;
       }
