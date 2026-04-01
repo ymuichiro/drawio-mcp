@@ -14,3 +14,14 @@ class_name = "MCPSessionManager"
 # No new migrations needed - MCPSessionManager already exists
 [[migrations]]
 tag = "v3"
+
+[env.staging]
+name = "drawio-mcp-app-staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "MCP_SESSION_MANAGER"
+class_name = "MCPSessionManager"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_classes = ["MCPSessionManager"]

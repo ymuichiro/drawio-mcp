@@ -102,26 +102,17 @@ export class MCPSessionManager
         return withCors(new Response("Session not found. Send a POST to initialize first.", { status: 400 }));
       }
 
-      // If the client sent a session ID we don't recognize, the session
-      // was cleaned up or lost (e.g. after a deploy). Return 404 per the
-      // MCP spec so the client re-initializes with a fresh session.
       if (existingSessionId)
       {
-        this.log(`[sessions] REJECTED stale session id=${sessionId.slice(0, 8)} total=${this.sessions.size}`);
-
-        return withCors(new Response(JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          error: { code: -32001, message: "Session not found" },
-          id: null,
-        }),
-        {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        }));
+        // Client sent a session ID we don't recognize — the session was
+        // cleaned up or lost (e.g. after a deploy). Re-create it
+        // transparently so the client doesn't need to re-initialize.
+        this.log(`[session-recreate] stale=${existingSessionId.slice(0, 8)} total=${this.sessions.size}`);
       }
-
-      this.log(`[session-create] domain=${this.env.DOMAIN || "UNDEFINED"} session=${sessionId.slice(0, 8)}`);
+      else
+      {
+        this.log(`[session-create] domain=${this.env.DOMAIN || "UNDEFINED"} session=${sessionId.slice(0, 8)}`);
+      }
 
       const server = createServer(html, { domain: this.env.DOMAIN });
       const transport = new WebStandardStreamableHTTPServerTransport(
@@ -136,6 +127,16 @@ export class MCPSessionManager
       };
 
       await server.connect(transport);
+
+      // For re-created sessions (stale ID), mark the transport as
+      // already initialized so it accepts non-initialize requests.
+      // The MCP Server is ready after connect(), only the transport
+      // gate needs to be opened.
+      if (existingSessionId)
+      {
+        transport._initialized = true;
+        transport.sessionId = sessionId;
+      }
 
       session =
       {
