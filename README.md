@@ -68,6 +68,25 @@ An alternative approach that works **without installing anything**. Add instruct
 
 ---
 
+## XML Reference (Single Source of Truth)
+
+The draw.io XML generation reference — covering edge routing, containers, layers, tags, metadata, dark mode, style properties, and XML well-formedness — lives in a single canonical file:
+
+**[`shared/xml-reference.md`](shared/xml-reference.md)**
+
+All four approaches above use this file as their single source of truth for LLM prompts:
+
+| Approach | How it accesses the reference |
+|----------|-------------------------------|
+| MCP App Server | Reads the file at startup / build time and includes it in the tool description |
+| MCP Tool Server | Reads the file at startup (from repo or bundled copy via `prepack`) |
+| Skill + CLI | References the [GitHub raw URL](https://raw.githubusercontent.com/jgraph/drawio-mcp/main/shared/xml-reference.md) |
+| Project Instructions | Users copy its contents into their Claude Project |
+
+When updating XML generation guidance, edit only `shared/xml-reference.md` — changes propagate to all consumers automatically.
+
+---
+
 ## Development
 
 ```bash

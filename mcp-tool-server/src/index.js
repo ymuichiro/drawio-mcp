@@ -5,11 +5,23 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import pako from "pako";
 import { spawn } from "child_process";
-import { writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { tmpdir } from "os";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const DRAWIO_BASE_URL = "https://app.diagrams.net/";
+
+// Read the shared XML reference once at startup (single source of truth).
+// In the repo: read from shared/. When installed via npm: read from the
+// local copy created by the prepack script.
+const sharedPath = join(__dirname, "..", "..", "shared", "xml-reference.md");
+const localPath = join(__dirname, "xml-reference.md");
+const xmlReference = readFileSync(
+  existsSync(sharedPath) ? sharedPath : localPath,
+  "utf-8"
+);
 
 /**
  * Opens a URL in the default browser (cross-platform)
@@ -121,26 +133,8 @@ const tools =
     description:
       "Opens the draw.io editor with a diagram from XML content. " +
       "Use this to view, edit, or create diagrams in draw.io format. " +
-      "The XML should be valid draw.io/mxGraph XML format. " +
-      "IMPORTANT: Do NOT include ANY XML comments (<!-- -->) in the output — they are strictly forbidden. " +
-      "EDGE GEOMETRY: Every edge mxCell MUST contain a <mxGeometry relative=\"1\" as=\"geometry\" /> child element, even when there are no waypoints. Self-closing edge cells (<mxCell ... edge=\"1\" ... />) are invalid and will not render correctly. " +
-      "EDGE ROUTING: Use edgeStyle=orthogonalEdgeStyle for right-angle connectors. " +
-      "Space nodes at least 60px apart to avoid overlapping edges. " +
-      "Use exitX/exitY/entryX/entryY (0-1) to control which side of a node an edge connects to, spreading connections across different sides. " +
-      "Add explicit waypoints via <Array as=\"points\"><mxPoint x=\"...\" y=\"...\"/></Array> inside mxGeometry when edges would overlap. " +
-      "ARROWHEAD CLEARANCE: The final straight segment of an edge (between the last bend and the target, or source and first bend) must be long enough to fit the arrowhead (default size 6, configurable via startSize/endSize). If too short, the arrowhead overlaps the bend. Ensure at least 20px of straight segment. The orthogonal auto-router can place bends too close to shapes when nodes are nearly aligned - fix by increasing spacing or adding explicit waypoints. " +
-      "CONTAINERS: For architecture diagrams and any diagram with nested elements, use proper parent-child containment (set parent=\"containerId\" on children, use relative coordinates). " +
-      "Container types: (1) group style (style=\"group;\") for invisible containers with no connections - includes pointerEvents=0 so child connections are not captured by the container; " +
-      "(2) swimlane style (style=\"swimlane;startSize=30;\") for labeled containers with a title bar - use when the container needs visual borders/headers or when the container itself has connections; " +
-      "(3) any shape can be a container by adding container=1 to its style, but also add pointerEvents=0 unless the container itself needs to be connectable. " +
-      "Always use pointerEvents=0 on container styles that should not capture connections being rewired between children. " +
-      "EDGE LABELS: Do NOT wrap edge labels in HTML markup to reduce font size. The default font size for edge labels is already 11px (vs 12px for vertices), so they are already smaller. Just set the value attribute directly. " +
-      "LAYOUT: Align nodes to a grid (multiples of 10). Use consistent spacing (e.g., 200px horizontal, 120px vertical between nodes). " +
-      "DARK MODE COLORS: To enable dark mode color adaptation, the mxGraphModel element must include adaptiveColors=\"auto\". " +
-      "strokeColor, fillColor, and fontColor default to 'default', which renders as black in light theme and white in dark theme. " +
-      "Explicit colors (e.g. fillColor=#DAE8FC) specify the light-mode color; the dark-mode color is computed automatically by inverting RGB values and rotating the hue 180 degrees. " +
-      "To specify both colors explicitly, use light-dark(lightColor,darkColor) in the style string, e.g. fontColor=light-dark(#7EA6E0,#FF0000). " +
-      "See https://www.drawio.com/doc/faq/drawio-style-reference.html for the complete style reference.",
+      "The XML should be valid draw.io/mxGraph XML format.\n\n" +
+      xmlReference,
     inputSchema:
     {
       type: "object",

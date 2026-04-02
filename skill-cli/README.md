@@ -66,6 +66,13 @@ More examples:
 
 The `.drawio.*` double extension signals that the file contains embedded diagram XML. Open any of these in draw.io to recover and edit the full diagram. The intermediate `.drawio` source file is deleted after export since the exported file contains the complete diagram.
 
+## XML Reference
+
+The skill references the shared XML generation guide (edge routing, containers, layers, tags, metadata, dark mode, etc.) from GitHub at runtime:
+[`shared/xml-reference.md`](../shared/xml-reference.md)
+
+This is the single source of truth for all draw.io MCP prompts across the repository. No extra files need to be copied during installation.
+
 ## Why XML Only?
 
 A `.drawio` file is just mxGraphModel XML. Mermaid and CSV formats require draw.io's server-side conversion — they can't be saved as native files. Claude generates XML directly for all diagram types, which means:

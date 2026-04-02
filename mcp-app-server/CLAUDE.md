@@ -7,7 +7,6 @@ Renders draw.io diagrams inline in AI chat interfaces using the MCP Apps protoco
 | File | Purpose |
 |------|---------|
 | `src/shared.js` | Shared logic: `buildHtml()`, `processAppBundle()`, `createServer()` |
-| `src/diagram-templates.js` | Bundled official starter templates and lookup helpers for `get_drawio_template_xml` |
 | `src/index.js` | Node.js entry (Express + stdio transports) |
 | `src/worker.js` | Cloudflare Workers entry (Web Standard fetch handler) |
 | `src/build-html.js` | Build script: generates `generated-html.js` for the Worker |
@@ -45,7 +44,7 @@ The Worker uses **4 sharded Durable Objects** (`MCPSessionManager`) to manage al
 - Routing: `parseInt(sessionId.charAt(0), 16) % 4` determines the shard
 - New sessions (no session ID) go to a random shard; the DO generates a UUID whose first hex char routes back to that shard
 - Each DO maintains a `Map` of session IDs to server/transport instances
-- Sessions are kept alive for **30 minutes** of inactivity, then cleaned up (runs every 60 seconds)
+- Sessions are kept alive for **5 minutes** of inactivity, then cleaned up (runs every 60 seconds)
 
 **Why sharded DOs?**
 - Durable Objects charge per request + per GB-seconds of active memory
@@ -70,28 +69,13 @@ The Worker uses **4 sharded Durable Objects** (`MCPSessionManager`) to manage al
 - CSP config goes on the **resource contents** `_meta.ui.csp`, not on the tool's `_meta.ui`
 - TypeScript narrowing: use `if (block.type === "text")` before accessing `.text` on content blocks
 
-## App Server Tools
+## XML Reference
 
-- `create_diagram` renders inline diagrams from XML
-- `get_drawio_template_xml` returns one bundled official template XML at a time (`AWS`, `AZURE`, `MINDMAP`)
+The tool description for `create_diagram` is loaded at startup from `shared/xml-reference.md` (single source of truth for all prompts). The `xmlReference` string is passed to `createServer()` via options. For the Cloudflare Worker, it is pre-built into `generated-html.js` by `build-html.js`.
 
-## Self-Hosting Notes
+## Shape Search Index
 
-- `Dockerfile` builds a production-only image that runs as the `node` user
-- The repository-root `compose.yaml` keeps the app on an internal Docker network and places Cloudflare Tunnel in a separate sidecar container
-- Default hardening includes `read_only`, `tmpfs`, `cap_drop: [ALL]`, and `no-new-privileges:true`
-
-## Dark Mode Colors
-
-draw.io supports automatic dark mode rendering. How colors behave depends on the property:
-
-- **`strokeColor`, `fillColor`, `fontColor`** default to `"default"`, which renders as black in light theme and white in dark theme. When no explicit color is set, colors adapt automatically.
-- **Explicit colors** (e.g. `fillColor=#DAE8FC`) specify the light-mode color. The dark-mode color is computed automatically by inverting the RGB values (blending toward the inverse at 93%) and rotating the hue by 180° (via `mxUtils.getInverseColor`).
-- **`light-dark()` function** — To specify both colors explicitly, use `light-dark(lightColor,darkColor)` in the style string, e.g. `fontColor=light-dark(#7EA6E0,#FF0000)`. The first argument is used in light mode, the second in dark mode.
-
-To enable dark mode color adaptation, the `mxGraphModel` element must include `adaptiveColors="auto"`.
-
-When generating diagrams, you generally do not need to specify dark-mode colors — the automatic inversion handles most cases. Use `light-dark()` only when the automatic inverse color is unsatisfactory.
+The `search_shapes` tool uses a pre-built index from `shape-search/search-index.json` (~10,000 shapes). The index is embedded in `generated-html.js` at build time (adds ~4 MB to the Worker bundle). The search runs in-process — no external HTTP calls. The tag lookup map is built once per session when `createServer()` is called. If the index file is missing, `search_shapes` is silently not registered.
 
 ## Coding Conventions
 
@@ -133,7 +117,7 @@ Debug logging is **off by default**. Enable via `wrangler secret put DEBUG` (set
 - **Server works end-to-end via curl** — all 6 MCP protocol steps succeed (initialize → notifications/initialized → tools/list → resources/list → resources/read → tools/call)
 - **Claude.ai never sends `resources/read` or `tools/call`** — completes the handshake (through `resources/subscribe`) but stops. This is a Claude.ai-side issue, not a server bug
 - **MCP Apps for custom connectors** may not be fully supported on Claude.ai yet. Contact `mcp-apps@anthropic.com` for status
-- **"Session not found" (404)** — returned when clients resume stale session IDs after cleanup (4-minute idle timeout) or after deploys. Clients should re-initialize with a fresh session
+- **"Session not found" (404)** — returned when clients resume stale session IDs after cleanup (5-minute idle timeout) or after deploys. Clients should re-initialize with a fresh session
 - **SSE stream conflicts** (`409 Conflict: Only one SSE stream`) are benign — clients reconnecting SSE on sessions that already have an active stream
 
 ## Scripts

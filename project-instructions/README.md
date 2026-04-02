@@ -13,7 +13,8 @@ An alternative approach that works **without installing the MCP server**. Instea
 
 1. Open your Claude Project settings
 2. Add the contents of [`claude-project-instructions.txt`](claude-project-instructions.txt) to your project instructions
-3. Ask Claude to create diagrams - it will generate clickable draw.io URLs
+3. Also add the contents of [`shared/xml-reference.md`](../shared/xml-reference.md) — this is the XML generation reference covering edge routing, containers, layers, tags, metadata, dark mode, and more
+4. Ask Claude to create diagrams - it will generate clickable draw.io URLs
 
 ## How It Works
 

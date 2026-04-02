@@ -8,7 +8,8 @@
     "drawio-mcp": "./src/index.js"
   },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "prepack": "cp ../shared/xml-reference.md src/xml-reference.md"
   },
   "keywords": [
     "mcp",

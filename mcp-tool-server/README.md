@@ -116,6 +116,8 @@ Opens the draw.io editor with a Mermaid.js diagram.
 4. The URL is returned to the LLM, which can present it to the user
 5. Opening the URL loads draw.io with the diagram ready to view/edit
 
+The `open_drawio_xml` tool description includes the full XML generation reference (edge routing, containers, layers, tags, metadata, dark mode, etc.) loaded from [`shared/xml-reference.md`](../shared/xml-reference.md) — the single source of truth for all draw.io MCP prompts. A `prepack` script bundles this file into the npm package so it works after `npm install`.
+
 ## Related Resources
 
 - [draw.io](https://www.draw.io) - Free online diagram editor

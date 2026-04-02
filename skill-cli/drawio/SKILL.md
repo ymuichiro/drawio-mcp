@@ -162,47 +162,10 @@ Every diagram must have this structure:
 - Cell `id="1"` is the default parent layer
 - All diagram elements use `parent="1"` unless using multiple layers
 
-Consult `references/xml-reference.md` for common styles, style properties, edge routing details (including waypoints), and container/group examples.
+## XML reference
 
-## Edge routing
-
-**CRITICAL: Every edge `mxCell` must contain a `<mxGeometry relative="1" as="geometry" />` child element**, even when there are no waypoints. Self-closing edge cells (e.g. `<mxCell ... edge="1" ... />`) are invalid and will not render correctly. Always use the expanded form:
-```xml
-<mxCell id="e1" edge="1" parent="1" source="a" target="b" style="...">
-  <mxGeometry relative="1" as="geometry" />
-</mxCell>
-```
-
-- Use `edgeStyle=orthogonalEdgeStyle` for right-angle connectors (most common)
-- **Space nodes generously** — prefer 200px horizontal / 120px vertical gaps
-- **Leave room for arrowheads** — at least 20px of straight segment before the target
-- Add explicit **waypoints** when edges would overlap
-- Align all nodes to a grid (multiples of 10)
-- **Edge labels**: Do NOT wrap edge labels in HTML markup to reduce font size. The default font size for edge labels is already 11px (vs 12px for vertices), so they are already smaller. Just set the `value` attribute directly.
-
-See `references/xml-reference.md` for full edge routing and container guidance.
-
-## Containers and groups
-
-Use parent-child containment (`parent="containerId"`) for nested elements — do **not** just stack shapes. Children use **relative coordinates** within the container. See `references/xml-reference.md` for container types, rules, and examples.
-
-## Dark mode colors
-
-draw.io supports automatic dark mode rendering. How colors behave depends on the property:
-
-- **`strokeColor`, `fillColor`, `fontColor`** default to `"default"`, which renders as black in light theme and white in dark theme. When no explicit color is set, colors adapt automatically.
-- **Explicit colors** (e.g. `fillColor=#DAE8FC`) specify the light-mode color. The dark-mode color is computed automatically by inverting the RGB values (blending toward the inverse at 93%) and rotating the hue by 180° (via `mxUtils.getInverseColor`).
-- **`light-dark()` function** — To specify both colors explicitly, use `light-dark(lightColor,darkColor)` in the style string, e.g. `fontColor=light-dark(#7EA6E0,#FF0000)`. The first argument is used in light mode, the second in dark mode.
-
-To enable dark mode color adaptation, the `mxGraphModel` element must include `adaptiveColors="auto"`.
-
-When generating diagrams, you generally do not need to specify dark-mode colors — the automatic inversion handles most cases. Use `light-dark()` only when the automatic inverse color is unsatisfactory.
-
-## Style reference
-
-For the complete draw.io style reference: https://www.drawio.com/doc/faq/drawio-style-reference.html
-
-For the XML Schema Definition (XSD): https://www.drawio.com/assets/mxfile.xsd
+For the complete draw.io XML reference including common styles, edge routing, containers, layers, tags, metadata, dark mode colors, and XML well-formedness rules, fetch and follow the instructions at:
+https://raw.githubusercontent.com/jgraph/drawio-mcp/main/shared/xml-reference.md
 
 ## Troubleshooting
 
