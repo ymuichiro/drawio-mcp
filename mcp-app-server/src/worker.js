@@ -289,12 +289,12 @@ export class MCPSessionManager
   }
 
   /**
-   * Remove sessions that haven't been accessed in the last 30 minutes.
+   * Remove sessions that haven't been accessed in the last 5 minutes.
    */
   cleanupStaleSessions()
   {
     const now = Date.now();
-    const STALE_TIMEOUT = 4 * 60 * 1000;
+    const STALE_TIMEOUT = 5 * 60 * 1000;
     let cleaned = 0;
     const removedIds = [];
 
