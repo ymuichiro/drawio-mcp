@@ -235,7 +235,7 @@ When generating diagrams, you generally do not need to specify dark-mode colors 
 
 ## Style reference
 
-Complete style reference: https://www.drawio.com/doc/faq/drawio-style-reference.html
+Complete style reference (all shape types, style properties, color palettes, HTML labels, and more): https://github.com/jgraph/drawio-mcp/blob/main/shared/drawio-style-reference.md
 
 XML Schema (XSD): https://www.drawio.com/assets/mxfile.xsd
 
