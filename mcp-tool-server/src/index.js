@@ -283,6 +283,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) =>
       };
     }
 
+    if (typeof inputContent !== "string")
+    {
+      const actualType = typeof inputContent;
+      const preview = JSON.stringify(inputContent).substring(0, 200);
+
+      return {
+        content:
+        [
+          {
+            type: "text",
+            text: `Error: content parameter must be a string, but received ${actualType}: ${preview}\n\n` +
+              "Common mistake: passing a JSON object or nested structure instead of a plain string. " +
+              "Make sure the diagram content (XML, CSV, or Mermaid) is passed directly as a string value.",
+          },
+        ],
+        isError: true,
+      };
+    }
+
     content = inputContent;
 
     switch (name)
