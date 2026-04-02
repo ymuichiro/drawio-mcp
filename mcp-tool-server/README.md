@@ -59,6 +59,25 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
+### Claude Code
+
+```bash
+claude mcp add drawio -- npx -y @drawio/mcp
+```
+
+Or manually in `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "@drawio/mcp"]
+    }
+  }
+}
+```
+
 ### Other MCP Clients
 
 Configure your MCP client to run the server via stdio:
