@@ -6,10 +6,10 @@ The official draw.io MCP (Model Context Protocol) server that enables LLMs to op
 
 - **`shared/`** — Shared XML generation reference (`xml-reference.md`), the single source of truth for all LLM prompts.
 - **`mcp-app-server/`** — MCP App server (renders diagrams inline in chat via iframe). Hosted at `https://mcp.draw.io/mcp`. Can also be self-hosted via Node.js or Cloudflare Workers.
-- **`compose.yaml`** — Hardened Docker Compose stack for self-hosting the MCP App server behind a Cloudflare Tunnel sidecar.
 - **`mcp-tool-server/`** — Original MCP tool server (stdio-based, opens browser). Published as `@drawio/mcp` on npm.
 - **`project-instructions/`** — Claude Project instructions (no MCP required, no install).
 - **`skill-cli/`** — Claude Code skill (generates native `.drawio` files, opens in desktop app). No MCP required.
+- **`shape-search/`** — Shape search index generator. Loads draw.io's `app.min.js` via jsdom to extract all shape styles and tags into `search-index.json`, which powers the `search_shapes` MCP tool. Re-run after updating `drawio-dev` to pick up new or changed shapes.
 
 Each subdirectory has its own `CLAUDE.md` with implementation details.
 
@@ -21,11 +21,13 @@ Each subdirectory has its own `CLAUDE.md` with implementation details.
 - **Output**: Interactive diagram rendered inline via the draw.io viewer library
 - **Features**: Zoom, pan, layers, fullscreen, "Open in draw.io" button
 
-### `get_drawio_template_xml`
+### `search_shapes`
 
-- **Input**: `{ template: "AWS" | "AZURE" | "MINDMAP" }`
-- **Output**: Raw draw.io XML for the requested official starter template only
-- **Purpose**: Lets the host fetch one example template without blowing out the context window
+- **Input**: `{ query: string, limit?: number }` - Search keywords and optional max results (default: 10, max: 50)
+- **Output**: Array of matching shapes with `{style, w, h, title}` — style strings can be used directly in mxCell attributes
+- **Search**: AND logic across space-separated terms, exact + Soundex phonetic matching
+- **Coverage**: ~10,000+ shapes across all draw.io libraries (AWS, Azure, GCP, P&ID, electrical, Cisco, Kubernetes, UML, BPMN, etc.)
+- **Use case**: Call before `create_diagram` only for diagrams needing industry-specific icons (cloud, network, P&ID, electrical, Cisco, Kubernetes). Skip for standard diagrams (flowcharts, UML, ERD, org charts) that use basic geometric shapes
 
 ## MCP Tool Server Tools
 

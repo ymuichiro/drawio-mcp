@@ -34,6 +34,10 @@ Add this URL as a remote MCP server in Claude.ai or any MCP Apps-compatible host
 
 You can also run the server locally via Node.js, Docker, or deploy your own instance to Cloudflare Workers.
 
+**Tools:**
+- **`create_diagram`** — Renders draw.io XML as an interactive diagram inline in chat
+- **`search_shapes`** — Searches 10,000+ shapes across all draw.io libraries (AWS, Azure, GCP, P&ID, electrical, Cisco, Kubernetes, UML, BPMN, etc.) by keyword. Returns exact style strings that can be used directly in XML. Use this to find the correct shape before calling `create_diagram`.
+
 **[Full documentation →](mcp-app-server/README.md)**
 
 > **Note:** Inline diagram rendering requires an MCP host that supports the MCP Apps extension. In hosts without MCP Apps support, the tool still works but returns the XML as text.
@@ -84,6 +88,27 @@ All four approaches above use this file as their single source of truth for LLM 
 | Project Instructions | Users copy its contents into their Claude Project |
 
 When updating XML generation guidance, edit only `shared/xml-reference.md` — changes propagate to all consumers automatically.
+
+---
+
+## Shape Search Index
+
+The `search_shapes` tool is powered by a pre-built index of all draw.io shapes. The index is generated from the draw.io client source code (`app.min.js`) by running all sidebar palette initializations in Node.js via jsdom and capturing the shape data.
+
+```bash
+# Generate the shape search index (requires ../drawio-dev checkout)
+cd shape-search
+npm install
+DRAWIO_DEV_PATH=../../drawio-dev node generate-index.js
+
+# Rebuild the MCP App Server worker to embed the updated index
+cd ../mcp-app-server
+npm run build:worker
+```
+
+**When to regenerate:** Re-run `generate-index.js` after updating `drawio-dev` (new shapes, renamed stencils, updated style strings). The script loads `app.min.js` and all sidebar palettes, so it captures any changes to the shape libraries automatically.
+
+The generated `search-index.json` is committed to the repository so that the MCP App Server can be built and deployed without a local `drawio-dev` checkout.
 
 ---
 
