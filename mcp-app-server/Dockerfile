@@ -1,12 +1,16 @@
-FROM node:25-alpine AS build
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-COPY . .
-RUN npm install
+RUN npm ci --omit=dev
 
-FROM node:25-alpine
+FROM node:22-alpine
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV LISTEN=0.0.0.0
 WORKDIR /app
-COPY --from=build /app .
-
-EXPOSE 3000
-CMD ["npm", "start"]
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./package.json
+COPY src ./src
+USER node
+EXPOSE 3001
+CMD ["node", "src/index.js"]

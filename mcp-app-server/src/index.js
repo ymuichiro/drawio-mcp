@@ -29,11 +29,31 @@ const html = buildHtml(appWithDepsJs, pakoDeflateJs);
 
 // --- Transport setup ---
 
+function parseAllowedHosts(value)
+{
+  if (!value)
+  {
+    return undefined;
+  }
+
+  const allowedHosts = value
+    .split(",")
+    .map(function(hostname) { return hostname.trim(); })
+    .filter(Boolean);
+
+  return allowedHosts.length > 0 ? allowedHosts : undefined;
+}
+
 async function startStreamableHTTPServer()
 {
   const port = parseInt(process.env.PORT ?? "3001", 10);
   const host = process.env.LISTEN ?? "127.0.0.1";
-  const app = createMcpExpressApp({ host: host });
+  const allowedHosts = parseAllowedHosts(process.env.ALLOWED_HOSTS);
+  const app = createMcpExpressApp(
+  {
+    host: host,
+    allowedHosts: allowedHosts,
+  });
 
   app.all("/mcp", async function(req, res)
   {

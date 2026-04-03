@@ -8,7 +8,7 @@ This repository offers four approaches for integrating draw.io with AI assistant
 
 | | [MCP App Server](#mcp-app-server) | [MCP Tool Server](#mcp-tool-server) | [Skill + CLI](#skill--cli) | [Project Instructions](#alternative-project-instructions-no-mcp-required) |
 |---|---|---|---|---|
-| **How it works** | Renders diagrams inline in chat | Opens diagrams in your browser | Generates `.drawio` files, optional PNG/SVG/PDF export | Claude generates draw.io URLs via Python |
+| **How it works** | Renders diagrams inline in chat and can return official starter template XML | Opens diagrams in your browser | Generates `.drawio` files, optional PNG/SVG/PDF export | Claude generates draw.io URLs via Python |
 | **Diagram output** | Interactive viewer embedded in conversation | draw.io editor in a new tab | `.drawio` or `.drawio.png` / `.svg` / `.pdf` | Clickable link to draw.io |
 | **Requires installation** | No (hosted at `mcp.draw.io`) | Yes (npm package) | Copy skill file + draw.io Desktop | No — just paste instructions |
 | **Supports XML, CSV, Mermaid** | XML only | ✅ All three | XML only (native format) | ✅ All three |
@@ -22,6 +22,8 @@ This repository offers four approaches for integrating draw.io with AI assistant
 
 The MCP App server renders draw.io diagrams **inline** in AI chat interfaces using the [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) protocol. Instead of opening a browser tab, diagrams appear directly in the conversation as interactive iframes.
 
+It also exposes a template helper method so hosts can fetch one official starter template XML at a time, such as `AWS`, `AZURE`, or `MINDMAP`, without flooding the context window.
+
 The official hosted endpoint is available at:
 
 ```
@@ -30,7 +32,7 @@ https://mcp.draw.io/mcp
 
 Add this URL as a remote MCP server in Claude.ai or any MCP Apps-compatible host — no installation required.
 
-You can also run the server locally via Node.js or deploy your own instance to Cloudflare Workers.
+You can also run the server locally via Node.js, Docker, or deploy your own instance to Cloudflare Workers.
 
 **[Full documentation →](mcp-app-server/README.md)**
 

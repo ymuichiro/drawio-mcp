@@ -5,7 +5,13 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  DIAGRAM_TEMPLATE_NAMES,
+  getDiagramTemplate,
+} from "./diagram-templates.js";
 import { normalizeDiagramXml, INVALID_DIAGRAM_XML_MESSAGE } from "./normalize-diagram-xml.js";
+
+const DIAGRAM_TEMPLATE_LIST = DIAGRAM_TEMPLATE_NAMES.join(", ");
 
 /**
  * Build the self-contained HTML string that renders diagrams.
@@ -313,7 +319,7 @@ export function processAppBundle(raw)
 }
 
 /**
- * Create a new MCP server instance with the create_diagram tool + UI resource.
+ * Create a new MCP server instance with tools + UI resource.
  *
  * @param {string} html - The pre-built, self-contained HTML string.
  * @param {object} [serverOptions] - Optional McpServer constructor options (e.g. jsonSchemaValidator).
@@ -371,6 +377,44 @@ export function createServer(html, serverOptions = {})
       var normalizedXml = normalizeDiagramXml(xml);
 
       return { content: [{ type: "text", text: normalizedXml || xml }] };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get_drawio_template_xml",
+    {
+      title: "Get Draw.io Template XML",
+      description:
+        "Returns the XML for a single built-in draw.io starter template. " +
+        "Use this when you need an official sample without flooding the conversation with every template at once. " +
+        `Available template values: ${DIAGRAM_TEMPLATE_LIST}.`,
+      inputSchema:
+      {
+        template: z
+          .enum(DIAGRAM_TEMPLATE_NAMES)
+          .describe(
+            `Starter template name to return. Available values: ${DIAGRAM_TEMPLATE_LIST}.`
+          ),
+      },
+      annotations:
+      {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async function({ template })
+    {
+      var diagramTemplate = getDiagramTemplate(template);
+
+      if (!diagramTemplate)
+      {
+        throw new Error(`Unknown template "${template}". Available values: ${DIAGRAM_TEMPLATE_LIST}.`);
+      }
+
+      return { content: [{ type: "text", text: diagramTemplate.xml }] };
     }
   );
 
