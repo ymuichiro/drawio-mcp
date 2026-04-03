@@ -12,7 +12,7 @@
     Notes:
     - Style strings (e.g. "rounded=1;whiteSpace=wrap;html=1;") are typed as
       xs:string. The style syntax is documented separately in
-      drawio-style-reference.md.
+      style-reference.md.
     - mxCell is intentionally generic: vertex/edge/connectable determine the role.
     - The first two mxCell elements in root are structural: id="0" (root container)
       and id="1" (default layer). All diagram elements must reference these.
@@ -23,7 +23,7 @@
     - mxGeometry child elements (mxPoint, Array, mxRectangle) may appear in
       any order. The schema uses xs:choice to reflect this flexibility.
 
-    Companion document: drawio-style-reference.md
+    Companion document: style-reference.md
   -->
 
   <!-- ================================================================== -->
@@ -286,7 +286,7 @@
         Style string format: semicolon-separated key=value pairs.
         Shape name can appear as first token without key (e.g. "ellipse;...").
         Example: "rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;"
-        See drawio-style-reference.md for complete style documentation.
+        See style-reference.md for complete style documentation.
       </xs:documentation>
     </xs:annotation>
     <xs:sequence>
@@ -322,7 +322,7 @@
           Format: "[shapeName;]key1=value1;key2=value2;..."
           Example vertex: "rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;"
           Example edge: "edgeStyle=orthogonalEdgeStyle;endArrow=classic;html=1;"
-          See drawio-style-reference.md for all properties and values.
+          See style-reference.md for all properties and values.
         </xs:documentation>
       </xs:annotation>
     </xs:attribute>
