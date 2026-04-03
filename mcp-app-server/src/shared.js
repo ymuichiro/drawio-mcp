@@ -404,6 +404,7 @@ export function createServer(html, serverOptions = {})
         idempotentHint: true,
         openWorldHint: false,
       },
+      _meta: {},
     },
     async function({ template })
     {
