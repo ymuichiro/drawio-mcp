@@ -1954,6 +1954,8 @@ export function createServer(html, options = {})
       description:
         "Creates and displays an interactive draw.io diagram. Pass draw.io XML (mxGraphModel format) to render it inline. " +
         "When the client uses a stateful HTTP session, the tool also returns a previewId in structuredContent that can be passed to get_diagram_preview to render a PNG preview for the current session only. " +
+        "After every create_diagram call, always call get_diagram_preview with that previewId and inspect the returned image before considering the diagram complete. " +
+        "If the preview shows layout problems, overlapping shapes, clipped labels, or especially broken connector routing between objects, revise the XML and render again until the preview is visually correct. " +
         "IMPORTANT: The XML must be well-formed. Do NOT include ANY XML comments (<!-- -->) in the output — they are strictly forbidden.\n\n" +
         xmlReference,
       inputSchema:
@@ -2049,7 +2051,9 @@ export function createServer(html, options = {})
       title: "Get Diagram Preview",
       description:
         "Renders a PNG preview for a diagram that was previously created in the current MCP session. " +
-        "Use the previewId returned by create_diagram. Previews are temporary and expire after roughly 10 minutes.",
+        "Use the previewId returned by create_diagram. Always use this preview after creating or revising a diagram so you can verify that the rendered result is correct. " +
+        "If the preview shows broken connector lines, overlapping arrows, poor spacing, or other visual defects, update the XML and call create_diagram again before finalizing the answer. " +
+        "Previews are temporary and expire after roughly 10 minutes.",
       inputSchema:
       {
         previewId: z
