@@ -5,7 +5,13 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  DIAGRAM_TEMPLATE_NAMES,
+  getDiagramTemplate,
+} from "./diagram-templates.js";
 import { normalizeDiagramXml, INVALID_DIAGRAM_XML_MESSAGE } from "./normalize-diagram-xml.js";
+
+const DIAGRAM_TEMPLATE_LIST = DIAGRAM_TEMPLATE_NAMES.join(", ");
 
 /**
  * Build the self-contained HTML string that renders diagrams.
@@ -1930,7 +1936,7 @@ function searchShapes(shapeIndex, tagMap, query, limit)
  */
 export function createServer(html, options = {})
 {
-  const { domain, xmlReference = "", shapeIndex = null, serverOptions = {} } = typeof options === "object" && options !== null
+  const { domain, xmlReference = "", shapeIndex = null, previewService = null, serverOptions = {} } = typeof options === "object" && options !== null
     ? options
     : { serverOptions: options };
   const server = new McpServer(
@@ -1947,6 +1953,7 @@ export function createServer(html, options = {})
       title: "Create Diagram",
       description:
         "Creates and displays an interactive draw.io diagram. Pass draw.io XML (mxGraphModel format) to render it inline. " +
+        "When the client uses a stateful HTTP session, the tool also returns a previewId in structuredContent that can be passed to get_diagram_preview to render a PNG preview for the current session only. " +
         "IMPORTANT: The XML must be well-formed. Do NOT include ANY XML comments (<!-- -->) in the output — they are strictly forbidden.\n\n" +
         xmlReference,
       inputSchema:
@@ -1971,7 +1978,7 @@ export function createServer(html, options = {})
         "openai/toolInvocation/invoked": "Diagram ready.",
       },
     },
-    async function({ xml })
+    async function({ xml }, extra)
     {
       if (typeof xml !== "string" || xml.trim().length === 0)
       {
@@ -2014,7 +2021,157 @@ export function createServer(html, options = {})
         content.push({ type: "text", text: messages.join("\n\n") });
       }
 
-      return { content: content };
+      var previewMetadata = null;
+
+      if (previewService && extra.sessionId)
+      {
+        previewMetadata = await previewService.createPreview(extra.sessionId, normalizedXml);
+      }
+
+      return {
+        content: content,
+        structuredContent: previewMetadata
+          ? {
+              previewId: previewMetadata.previewId,
+              expiresAt: previewMetadata.expiresAt,
+              ttlSeconds: previewMetadata.ttlSeconds,
+              previewTool: "get_diagram_preview",
+            }
+          : undefined,
+      };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get_diagram_preview",
+    {
+      title: "Get Diagram Preview",
+      description:
+        "Renders a PNG preview for a diagram that was previously created in the current MCP session. " +
+        "Use the previewId returned by create_diagram. Previews are temporary and expire after roughly 10 minutes.",
+      inputSchema:
+      {
+        previewId: z
+          .string()
+          .uuid()
+          .describe("Temporary preview identifier returned by create_diagram for the current session."),
+      },
+      annotations:
+      {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta:
+      {
+        "openai/toolInvocation/invoking": "Rendering preview...",
+        "openai/toolInvocation/invoked": "Preview ready.",
+      },
+    },
+    async function({ previewId }, extra)
+    {
+      if (!previewService)
+      {
+        return {
+          isError: true,
+          content:
+          [
+            {
+              type: "text",
+              text: "Diagram preview rendering is not supported in this deployment.",
+            },
+          ],
+        };
+      }
+
+      if (!extra.sessionId)
+      {
+        return {
+          isError: true,
+          content:
+          [
+            {
+              type: "text",
+              text: "Diagram previews require a stateful MCP session.",
+            },
+          ],
+        };
+      }
+
+      var preview = await previewService.renderPreview(extra.sessionId, previewId);
+
+      if (!preview)
+      {
+        return {
+          isError: true,
+          content:
+          [
+            {
+              type: "text",
+              text: "Preview not found, expired, or unavailable for this session.",
+            },
+          ],
+        };
+      }
+
+      return {
+        content:
+        [
+          {
+            type: "image",
+            data: preview.data.toString("base64"),
+            mimeType: preview.mimeType,
+          },
+        ],
+        structuredContent:
+        {
+          previewId: preview.previewId,
+          expiresAt: preview.expiresAt,
+          ttlSeconds: preview.ttlSeconds,
+          mimeType: preview.mimeType,
+        },
+      };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get_drawio_template_xml",
+    {
+      title: "Get Draw.io Template XML",
+      description:
+        "Returns the XML for a single built-in draw.io starter template. " +
+        "Use this when you need an official sample without flooding the conversation with every template at once. " +
+        `Available template values: ${DIAGRAM_TEMPLATE_LIST}.`,
+      inputSchema:
+      {
+        template: z
+          .enum(DIAGRAM_TEMPLATE_NAMES)
+          .describe(
+            `Starter template name to return. Available values: ${DIAGRAM_TEMPLATE_LIST}.`
+          ),
+      },
+      annotations:
+      {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta: {},
+    },
+    async function({ template })
+    {
+      var diagramTemplate = getDiagramTemplate(template);
+
+      if (!diagramTemplate)
+      {
+        throw new Error(`Unknown template "${template}". Available values: ${DIAGRAM_TEMPLATE_LIST}.`);
+      }
+
+      return { content: [{ type: "text", text: diagramTemplate.xml }] };
     }
   );
 

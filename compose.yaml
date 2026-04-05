@@ -3,8 +3,8 @@ name: drawio-mcp
 services:
   app:
     build:
-      context: ./mcp-app-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: mcp-app-server/Dockerfile
     environment:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       NODE_ENV: production

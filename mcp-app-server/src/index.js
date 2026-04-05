@@ -3,19 +3,19 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHtml, processAppBundle, createServer } from "./shared.js";
+import { DiagramPreviewRenderer } from "./preview-renderer.js";
+import { DiagramPreviewStore } from "./preview-store.js";
+
+const SESSION_IDLE_TTL_MS = 5 * 60 * 1000;
 
 // Read the browser bundles once at startup and inline them into the HTML
 const extAppsEntry = fileURLToPath(import.meta.resolve("@modelcontextprotocol/ext-apps/app-with-deps"));
 const appWithDepsRaw = fs.readFileSync(extAppsEntry, "utf-8");
-
-// The bundle is ESM: ends with export{..., oc as App, ...}.
-// We can't use <script type="module"> (export aliases aren't local vars)
-// and Blob URL import() fails in sandboxed iframes without allow-same-origin.
-// Fix: strip the export statement and create a local `App` alias.
 const appWithDepsJs = processAppBundle(appWithDepsRaw);
 
 const pakoEntry = fileURLToPath(import.meta.resolve("pako"));
@@ -24,122 +24,211 @@ const pakoDeflateJs = fs.readFileSync(
   "utf-8"
 );
 
-// Optionally inline a local viewer build (for testing GraphViewer changes).
-// Set VIEWER_PATH env var to the path of viewer-static.min.js (or a directory
-// containing it plus GraphViewer.js). Example:
-//   VIEWER_PATH=../drawio-dev/src/main/webapp/js npm start
-var viewerJs = null;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const viewerScriptPath = path.join(__dirname, "..", "vendor", "viewer-static.min.js");
+const xmlReferenceCandidates = [
+  path.join(__dirname, "..", "..", "shared", "xml-reference.md"),
+  path.join(__dirname, "..", "shared", "xml-reference.md"),
+];
+const shapeIndexCandidates = [
+  path.join(__dirname, "..", "..", "shape-search", "search-index.json"),
+  path.join(__dirname, "..", "shape-search", "search-index.json"),
+];
 
-if (process.env.VIEWER_PATH)
+function findFirstExistingPath(candidates)
 {
-  const viewerPath = path.resolve(process.env.VIEWER_PATH);
-
-  if (fs.statSync(viewerPath).isDirectory())
+  for (const candidate of candidates)
   {
-    // Load the minified viewer + unminified GraphViewer.js on top
-    const minJs = path.join(viewerPath, "viewer-static.min.js");
-    const gvJs = path.join(viewerPath, "diagramly", "GraphViewer.js");
-    viewerJs = fs.readFileSync(minJs, "utf-8");
-
-    if (fs.existsSync(gvJs))
+    if (fs.existsSync(candidate))
     {
-      viewerJs += "\n" + fs.readFileSync(gvJs, "utf-8");
+      return candidate;
     }
+  }
 
-    console.log("Using local viewer from", viewerPath);
-  }
-  else
-  {
-    viewerJs = fs.readFileSync(viewerPath, "utf-8");
-    console.log("Using local viewer from", viewerPath);
-  }
+  return null;
 }
 
-// Read the shared XML reference once at startup (single source of truth)
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const xmlReference = fs.readFileSync(
-  path.join(__dirname, "..", "..", "shared", "xml-reference.md"),
-  "utf-8"
-);
-
-// Read the shape search index (optional — skip if not yet generated)
-const shapeIndexPath = path.join(__dirname, "..", "..", "shape-search", "search-index.json");
+const xmlReferencePath = findFirstExistingPath(xmlReferenceCandidates);
+const xmlReference = xmlReferencePath
+  ? fs.readFileSync(xmlReferencePath, "utf-8")
+  : "";
+const shapeIndexPath = findFirstExistingPath(shapeIndexCandidates);
 var shapeIndex = null;
 
-if (fs.existsSync(shapeIndexPath))
+if (shapeIndexPath)
 {
   shapeIndex = JSON.parse(fs.readFileSync(shapeIndexPath, "utf-8"));
   console.log("Shape index: " + shapeIndex.length + " shapes");
 }
 
-// Pre-build the HTML once
-const html = buildHtml(appWithDepsJs, pakoDeflateJs, { viewerJs });
+const html = buildHtml(appWithDepsJs, pakoDeflateJs);
 
-// --- Transport setup ---
+function parseAllowedHosts(value)
+{
+  if (!value)
+  {
+    return undefined;
+  }
+
+  const allowedHosts = value
+    .split(",")
+    .map(function(hostname) { return hostname.trim(); })
+    .filter(Boolean);
+
+  return allowedHosts.length > 0 ? allowedHosts : undefined;
+}
+
+function isInitializeRequest(body)
+{
+  return Boolean(body && typeof body === "object" && body.method === "initialize");
+}
+
+function getSessionIdHeader(req)
+{
+  const sessionId = req.headers["mcp-session-id"];
+
+  return Array.isArray(sessionId) ? sessionId[0] : sessionId;
+}
 
 async function startStreamableHTTPServer()
 {
   const port = parseInt(process.env.PORT ?? "3001", 10);
   const host = process.env.LISTEN ?? "127.0.0.1";
-  const allowedHosts = process.env.ALLOWED_HOSTS
-    ? process.env.ALLOWED_HOSTS.split(",").map(function(h) { return h.trim(); })
-    : undefined;
-  const app = createMcpExpressApp({ host: "0.0.0.0", allowedHosts });
-
-  app.all("/mcp", async function(req, res)
+  const allowedHosts = parseAllowedHosts(process.env.ALLOWED_HOSTS);
+  const previewService = new DiagramPreviewStore(
   {
-    const method = req.body && req.body.method;
-    const sessionId = (req.headers["mcp-session-id"] || "").slice(0, 8);
-    const start = Date.now();
-    console.log(`[req] ${req.method} method=${method || "(none)"} session=${sessionId} accept=${req.headers["accept"] || ""}`);
+    renderer: new DiagramPreviewRenderer({ viewerScriptPath }),
+  });
+  const sessions = new Map();
+  const app = createMcpExpressApp(
+  {
+    host: host,
+    allowedHosts: allowedHosts,
+  });
 
-    if (req.body && Object.keys(req.body).length > 0)
+  async function deleteSession(sessionId, closeTransport = false)
+  {
+    const session = sessions.get(sessionId);
+
+    if (!session)
     {
-      console.log(`[req-body] ${JSON.stringify(req.body)}`);
+      return;
     }
 
-    const origWrite = res.write.bind(res);
-    const origEnd = res.end.bind(res);
-    var responseChunks = [];
+    sessions.delete(sessionId);
 
-    res.write = function(chunk)
+    if (closeTransport)
     {
-      if (chunk) { responseChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk)); }
-      return origWrite(chunk);
-    };
+      await session.transport.close().catch(function() {});
+    }
 
-    res.end = function(chunk)
+    await session.server.close().catch(function() {});
+    await previewService.clearSession(sessionId).catch(function() {});
+  }
+
+  async function cleanupStaleSessions()
+  {
+    const now = Date.now();
+    const expiredSessionIds = [];
+
+    for (const [sessionId, session] of sessions.entries())
     {
-      if (chunk) { responseChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk)); }
-      const elapsed = Date.now() - start;
-      console.log(`[res] method=${method || "(none)"} session=${sessionId} status=${res.statusCode} ${elapsed}ms`);
-
-      if (responseChunks.length > 0)
+      if (now - session.lastAccess > SESSION_IDLE_TTL_MS)
       {
-        const body = responseChunks.join("");
-        console.log(`[res-body] ${body.slice(0, 2000)}`);
+        expiredSessionIds.push(sessionId);
       }
+    }
 
-      return origEnd(chunk);
+    await Promise.all(expiredSessionIds.map(function(sessionId)
+    {
+      return deleteSession(sessionId, true);
+    }));
+
+    await previewService.cleanupExpired().catch(function(error)
+    {
+      console.error("Failed to clean up expired previews:", error);
+    });
+  }
+
+  async function createSession(req, res)
+  {
+    const server = createServer(
+      html,
+      {
+        domain: process.env.DOMAIN,
+        xmlReference,
+        shapeIndex,
+        previewService,
+      }
+    );
+    let transport;
+
+    transport = new StreamableHTTPServerTransport(
+    {
+      sessionIdGenerator: function() { return randomUUID(); },
+      onsessioninitialized: function(sessionId)
+      {
+        sessions.set(sessionId,
+        {
+          server,
+          transport,
+          lastAccess: Date.now(),
+        });
+      },
+    });
+
+    transport.onclose = function()
+    {
+      if (transport.sessionId)
+      {
+        deleteSession(transport.sessionId, false).catch(function() {});
+      }
     };
 
-    const server = createServer(html, { domain: process.env.DOMAIN, xmlReference, shapeIndex });
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  }
 
-    const transport = new StreamableHTTPServerTransport(
-    {
-      sessionIdGenerator: undefined,
-    });
-
-    res.on("close", function()
-    {
-      transport.close().catch(function() {});
-      server.close().catch(function() {});
-    });
+  async function handleMcpRequest(req, res)
+  {
+    const sessionId = getSessionIdHeader(req);
 
     try
     {
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
+      await cleanupStaleSessions();
+
+      if (sessionId)
+      {
+        const session = sessions.get(sessionId);
+
+        if (!session)
+        {
+          res.status(404).json(
+          {
+            jsonrpc: "2.0",
+            error: { code: -32001, message: "Session not found" },
+            id: null,
+          });
+          return;
+        }
+
+        session.lastAccess = Date.now();
+        await session.transport.handleRequest(req, res, req.body);
+        return;
+      }
+
+      if (req.method === "POST" && isInitializeRequest(req.body))
+      {
+        await createSession(req, res);
+        return;
+      }
+
+      res.status(400).json(
+      {
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Bad Request: No valid session ID provided" },
+        id: null,
+      });
     }
     catch (error)
     {
@@ -155,27 +244,45 @@ async function startStreamableHTTPServer()
         });
       }
     }
-  });
+  }
+
+  app.post("/mcp", handleMcpRequest);
+  app.get("/mcp", handleMcpRequest);
+  app.delete("/mcp", handleMcpRequest);
 
   const httpServer = app.listen(port, function()
   {
     console.log(`MCP App server listening on http://${host}:${port}/mcp`);
   });
 
-  const shutdown = function()
+  const shutdown = async function()
   {
     console.log("\nShutting down...");
+
+    for (const sessionId of sessions.keys())
+    {
+      await deleteSession(sessionId, true);
+    }
+
+    await previewService.close().catch(function() {});
     httpServer.close(function() { process.exit(0); });
     setTimeout(function() { process.exit(0); }, 1000).unref();
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", function() { shutdown().catch(function() { process.exit(1); }); });
+  process.on("SIGTERM", function() { shutdown().catch(function() { process.exit(1); }); });
 }
 
 async function startStdioServer()
 {
-  await createServer(html, { domain: process.env.DOMAIN, xmlReference, shapeIndex }).connect(new StdioServerTransport());
+  await createServer(
+    html,
+    {
+      domain: process.env.DOMAIN,
+      xmlReference,
+      shapeIndex,
+    }
+  ).connect(new StdioServerTransport());
 }
 
 async function main()
