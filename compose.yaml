@@ -34,6 +34,33 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - app_net
+
+  localproxy:
+    image: alpine/socat:1.8.0.3
+    depends_on:
+      app:
+        condition: service_healthy
+    command:
+      - TCP-LISTEN:3001,fork,reuseaddr
+      - TCP:app:3001
+    ports:
+      - "127.0.0.1:${APP_PORT:-13001}:3001"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 64m
+    cpus: 0.25
+    networks:
+      - app_net
+      - ingress_net
 
   cloudflared:
     image: cloudflare/cloudflared:2026.3.0@sha256:6b599ca3e974349ead3286d178da61d291961182ec3fe9c505e1dd02c8ac31b0
@@ -58,3 +85,40 @@ services:
       - ALL
     mem_limit: 128m
     cpus: 0.5
+    networks:
+      - app_net
+      - egress_net
+
+  quicktunnel:
+    image: cloudflare/cloudflared:2026.3.0@sha256:6b599ca3e974349ead3286d178da61d291961182ec3fe9c505e1dd02c8ac31b0
+    profiles:
+      - quicktunnel
+    depends_on:
+      app:
+        condition: service_healthy
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --url
+      - http://app:3001
+      - --http-host-header
+      - ${QUICK_TUNNEL_HOST_HEADER:-app.internal}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 128m
+    cpus: 0.5
+    networks:
+      - app_net
+      - egress_net
+
+networks:
+  app_net:
+    internal: true
+  ingress_net:
+  egress_net:

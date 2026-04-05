@@ -327,9 +327,10 @@ export function processAppBundle(raw)
  */
 export function createServer(html, serverOptions = {})
 {
+  const { previewService, ...mcpServerOptions } = serverOptions;
   const server = new McpServer(
     { name: "drawio-mcp-app", version: "1.0.0" },
-    serverOptions,
+    mcpServerOptions,
   );
 
   const resourceUri = "ui://drawio/mcp-app.html";
@@ -341,6 +342,7 @@ export function createServer(html, serverOptions = {})
       title: "Create Diagram",
       description:
         "Creates and displays an interactive draw.io diagram. Pass draw.io XML (mxGraphModel format) to render it inline. " +
+        "When the client uses a stateful HTTP session, the tool also returns a previewId in structuredContent that can be passed to get_diagram_preview to render a PNG preview for the current session only. " +
         "IMPORTANT: The XML must be well-formed. Do NOT use double hyphens (--) inside XML comments, as this is invalid XML and will break the parser. Use single hyphens or rephrase instead (e.g. <!-- Order 1 to OrderItem --> not <!-- Order 1 --- OrderItem -->). " +
         "EDGE GEOMETRY: Every edge mxCell MUST contain a <mxGeometry relative=\"1\" as=\"geometry\" /> child element, even when there are no waypoints. Self-closing edge cells (<mxCell ... edge=\"1\" ... />) are invalid and will not render correctly. " +
         "EDGE ROUTING: Use edgeStyle=orthogonalEdgeStyle for right-angle connectors. " +
@@ -372,11 +374,116 @@ export function createServer(html, serverOptions = {})
       },
       _meta: { ui: { resourceUri } },
     },
-    async function({ xml })
+    async function({ xml }, extra)
     {
       var normalizedXml = normalizeDiagramXml(xml);
+      var diagramXml = normalizedXml || xml;
+      var previewMetadata = null;
 
-      return { content: [{ type: "text", text: normalizedXml || xml }] };
+      if (previewService && extra.sessionId)
+      {
+        previewMetadata = await previewService.createPreview(extra.sessionId, diagramXml);
+      }
+
+      return {
+        content: [{ type: "text", text: diagramXml }],
+        structuredContent: previewMetadata ? {
+          previewId: previewMetadata.previewId,
+          expiresAt: previewMetadata.expiresAt,
+          ttlSeconds: previewMetadata.ttlSeconds,
+          previewTool: "get_diagram_preview",
+        } : undefined,
+      };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get_diagram_preview",
+    {
+      title: "Get Diagram Preview",
+      description:
+        "Renders a PNG preview for a diagram that was previously created in the current MCP session. " +
+        "Use the previewId returned by create_diagram. Previews are temporary and expire after roughly 10 minutes.",
+      inputSchema:
+      {
+        previewId: z
+          .string()
+          .uuid()
+          .describe("Temporary preview identifier returned by create_diagram for the current session."),
+      },
+      annotations:
+      {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta: {},
+    },
+    async function({ previewId }, extra)
+    {
+      if (!previewService)
+      {
+        return {
+          isError: true,
+          content:
+          [
+            {
+              type: "text",
+              text: "Diagram preview rendering is not supported in this deployment.",
+            },
+          ],
+        };
+      }
+
+      if (!extra.sessionId)
+      {
+        return {
+          isError: true,
+          content:
+          [
+            {
+              type: "text",
+              text: "Diagram previews require a stateful MCP session.",
+            },
+          ],
+        };
+      }
+
+      const preview = await previewService.renderPreview(extra.sessionId, previewId);
+
+      if (!preview)
+      {
+        return {
+          isError: true,
+          content:
+          [
+            {
+              type: "text",
+              text: "Preview not found, expired, or unavailable for this session.",
+            },
+          ],
+        };
+      }
+
+      return {
+        content:
+        [
+          {
+            type: "image",
+            data: preview.data.toString("base64"),
+            mimeType: preview.mimeType,
+          },
+        ],
+        structuredContent:
+        {
+          previewId: preview.previewId,
+          expiresAt: preview.expiresAt,
+          ttlSeconds: preview.ttlSeconds,
+          mimeType: preview.mimeType,
+        },
+      };
     }
   );
 
