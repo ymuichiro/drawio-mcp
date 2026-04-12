@@ -9,7 +9,12 @@ import {
   DIAGRAM_TEMPLATE_NAMES,
   getDiagramTemplate,
 } from "./diagram-templates.js";
-import { normalizeDiagramXml, INVALID_DIAGRAM_XML_MESSAGE } from "./normalize-diagram-xml.js";
+import {
+  normalizeDiagramXml,
+  INVALID_DIAGRAM_XML_MESSAGE,
+  describeDiagramXmlInput,
+  NORMALIZE_DIAGRAM_XML_BROWSER_RUNTIME,
+} from "./normalize-diagram-xml.js";
 
 const DIAGRAM_TEMPLATE_LIST = DIAGRAM_TEMPLATE_NAMES.join(", ");
 
@@ -133,7 +138,7 @@ export function buildHtml(appWithDepsJs, pakoDeflateJs, options)
     <!-- MCP Apps SDK (inlined, exports stripped, App alias added) -->
     <script>
 ${appWithDepsJs}
-${normalizeDiagramXml.toString()}
+${NORMALIZE_DIAGRAM_XML_BROWSER_RUNTIME}
 
 // --- XML healing for partial/streaming XML ---
 
@@ -1991,6 +1996,18 @@ export function createServer(html, options = {})
       }
 
       var normalizedXml = normalizeDiagramXml(xml);
+
+      if (process.env.MCP_DEBUG_REQUESTS === "1")
+      {
+        var inputDiagnostics = describeDiagramXmlInput(xml);
+        console.log(
+          "[create_diagram] session=%s shape=%s normalized=%s preview=%s",
+          extra.sessionId || "none",
+          inputDiagnostics.shape,
+          normalizedXml ? "yes" : "no",
+          inputDiagnostics.preview
+        );
+      }
 
       if (!normalizedXml)
       {
