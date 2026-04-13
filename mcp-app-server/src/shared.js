@@ -2010,12 +2010,13 @@ export function createServer(html, options = {})
   const { domain, xmlReference = "", shapeIndex = null, previewService = null, serverOptions = {} } = typeof options === "object" && options !== null
     ? options
     : { serverOptions: options };
+  const uiResourceVersion = "2026-04-13-01";
   const server = new McpServer(
-    { name: "drawio-mcp-app", version: "1.0.0" },
+    { name: "drawio-mcp-app", version: "1.0.1" },
     serverOptions,
   );
 
-  const resourceUri = "ui://drawio/mcp-app.html";
+  const resourceUri = "ui://drawio/mcp-app-" + uiResourceVersion + ".html";
 
   function summarizeBlocksForLog(content)
   {
@@ -2392,6 +2393,16 @@ export function createServer(html, options = {})
     { mimeType: RESOURCE_MIME_TYPE },
     async function()
     {
+      if (process.env.MCP_DEBUG_REQUESTS === "1")
+      {
+        console.log(
+          "[ui-resource] uri=%s domain=%s htmlLength=%s",
+          resourceUri,
+          domain || "none",
+          html.length
+        );
+      }
+
       return {
         contents:
         [
