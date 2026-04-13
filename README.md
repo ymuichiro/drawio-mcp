@@ -22,7 +22,7 @@ This repository offers four approaches for integrating draw.io with AI assistant
 
 The MCP App server renders draw.io diagrams **inline** in AI chat interfaces using the [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) protocol. Instead of opening a browser tab, diagrams appear directly in the conversation as interactive iframes.
 
-It also exposes a template helper method so hosts can fetch one official starter template XML at a time, such as `AWS`, `AZURE`, or `MINDMAP`, without flooding the context window. In the self-hosted Node server, `create_diagram` can return a temporary `previewId`, and `get_diagram_preview` can then return a rendered `image/png` for the same session.
+It also exposes a template helper method so hosts can fetch one official starter template XML at a time, such as `AWS`, `AZURE`, or `MINDMAP`, without flooding the context window. In the self-hosted Node server, `create_diagram` can return a temporary `previewId`, and `get_diagram_preview` can then return a rendered `image/png` for the same session. For ChatGPT, the self-hosted compose stack now defaults to a compatibility mode that suppresses `structuredContent` from `create_diagram`; disable that mode later if the host gains support. Debug request logging is available but now defaults to off.
 
 The official hosted endpoint is available at:
 

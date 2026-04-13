@@ -8,7 +8,7 @@ The MCP App server renders draw.io diagrams **inline** in AI chat interfaces usi
 2. The host fetches the UI resource and renders it in a sandboxed iframe
 3. The diagram is rendered using the official [draw.io viewer](https://viewer.diagrams.net)
 4. The user sees an interactive diagram inline with zoom, pan, and layers support
-5. In the Node.js self-hosted server, `create_diagram` can also return a temporary `previewId` so the host can call `get_diagram_preview` and inspect a rendered PNG before revising the XML
+5. In the Node.js self-hosted server, `create_diagram` can also return a temporary `previewId` so the host can call `get_diagram_preview` and inspect a rendered PNG before revising the XML, unless ChatGPT compatibility mode disables `structuredContent`
 
 ## Tool: `create_diagram`
 
@@ -21,7 +21,7 @@ The rendered diagram includes:
 - Layer toggling and lightbox mode
 - "Open in draw.io" button to edit the diagram in the full editor
 - Fullscreen mode
-- In stateful HTTP sessions, a temporary `previewId` in `structuredContent` for follow-up PNG rendering
+- In stateful HTTP sessions, a temporary `previewId` in `structuredContent` for follow-up PNG rendering when ChatGPT compatibility mode is disabled
 
 ## Tool: `get_diagram_preview`
 
@@ -122,7 +122,10 @@ The compose stack uses two Docker networks:
 1. Copy `.env.example` to `.env`
 2. Adjust `APP_PORT` if you want a local port other than `13001`
 3. Set `ALLOWED_HOSTS`
-4. Start only the local app:
+4. Leave `CHATGPT_COMPAT_MODE=1` if you want ChatGPT-safe behavior that suppresses `structuredContent` from `create_diagram`
+5. Set `CHATGPT_COMPAT_MODE=0` if your host fully supports `structuredContent` and you want automatic preview chaining
+6. Keep `MCP_DEBUG_REQUESTS=0` for normal operation and only enable it temporarily when you need request diagnostics
+7. Start only the local app:
 
 ```bash
 docker compose up -d --build
@@ -144,8 +147,10 @@ make down
 1. Copy `.env.example` to `.env`
 2. Set `CLOUDFLARE_TUNNEL_TOKEN` to your tunnel token
 3. Set `ALLOWED_HOSTS` to your public hostname plus any local names you want to allow, for example `drawio.example.com,localhost,127.0.0.1`
-4. In the Cloudflare dashboard, point the tunnel's service URL to `http://app:3001`
-5. Start the stack:
+4. Decide whether to keep `CHATGPT_COMPAT_MODE=1` for ChatGPT-safe behavior or set `CHATGPT_COMPAT_MODE=0` to re-enable `structuredContent`
+5. Keep `MCP_DEBUG_REQUESTS=0` unless you are actively diagnosing MCP request flow
+6. In the Cloudflare dashboard, point the tunnel's service URL to `http://app:3001`
+7. Start the stack:
 
 ```bash
 docker compose --profile tunnel up -d --build

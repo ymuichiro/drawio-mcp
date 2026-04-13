@@ -2007,12 +2007,12 @@ function searchShapes(shapeIndex, tagMap, query, limit)
  */
 export function createServer(html, options = {})
 {
-  const { domain, xmlReference = "", shapeIndex = null, previewService = null, serverOptions = {} } = typeof options === "object" && options !== null
+  const { domain, xmlReference = "", shapeIndex = null, previewService = null, chatgptCompatMode = false, serverOptions = {} } = typeof options === "object" && options !== null
     ? options
     : { serverOptions: options };
-  const uiResourceVersion = "2026-04-13-01";
+  const uiResourceVersion = "2026-04-14-01";
   const server = new McpServer(
-    { name: "drawio-mcp-app", version: "1.0.1" },
+    { name: "drawio-mcp-app", version: "1.0.2" },
     serverOptions,
   );
 
@@ -2069,9 +2069,14 @@ export function createServer(html, options = {})
       title: "Create Diagram",
       description:
         "Creates and displays an interactive draw.io diagram. Pass draw.io XML (mxGraphModel format) to render it inline. " +
-        "When the client uses a stateful HTTP session, the tool also returns a previewId in structuredContent that can be passed to get_diagram_preview to render a PNG preview for the current session only. " +
-        "After every create_diagram call, always call get_diagram_preview with that previewId and inspect the returned image before considering the diagram complete. " +
-        "If the preview shows layout problems, overlapping shapes, clipped labels, or especially broken connector routing between objects, revise the XML and render again until the preview is visually correct. " +
+        (
+          chatgptCompatMode
+            ? "ChatGPT compatibility mode is enabled, so this tool does not return structuredContent. " +
+              "Disable compatibility mode in the server configuration if you want automatic preview chaining to get_diagram_preview when your host fully supports structuredContent. "
+            : "When the client uses a stateful HTTP session, the tool also returns a previewId in structuredContent that can be passed to get_diagram_preview to render a PNG preview for the current session only. " +
+              "After every create_diagram call, always call get_diagram_preview with that previewId and inspect the returned image before considering the diagram complete. " +
+              "If the preview shows layout problems, overlapping shapes, clipped labels, or especially broken connector routing between objects, revise the XML and render again until the preview is visually correct. "
+        ) +
         "IMPORTANT: The XML must be well-formed. Do NOT include ANY XML comments (<!-- -->) in the output — they are strictly forbidden.\n\n" +
         xmlReference,
       inputSchema:
@@ -2153,7 +2158,7 @@ export function createServer(html, options = {})
 
       var previewMetadata = null;
 
-      if (previewService && extra.sessionId)
+      if (previewService && extra.sessionId && !chatgptCompatMode)
       {
         previewMetadata = await previewService.createPreview(extra.sessionId, normalizedXml);
       }
@@ -2172,7 +2177,7 @@ export function createServer(html, options = {})
 
       return {
         content: content,
-        structuredContent: previewMetadata
+        structuredContent: !chatgptCompatMode && previewMetadata
           ? {
               previewId: previewMetadata.previewId,
               expiresAt: previewMetadata.expiresAt,
@@ -2216,6 +2221,15 @@ export function createServer(html, options = {})
     },
     async function({ previewId }, extra)
     {
+      if (process.env.MCP_DEBUG_REQUESTS === "1")
+      {
+        console.log(
+          "[get_diagram_preview] session=%s previewId=%s",
+          extra.sessionId || "none",
+          previewId
+        );
+      }
+
       if (!previewService)
       {
         return {
@@ -2245,6 +2259,16 @@ export function createServer(html, options = {})
       }
 
       var preview = await previewService.renderPreview(extra.sessionId, previewId);
+
+      if (process.env.MCP_DEBUG_REQUESTS === "1")
+      {
+        console.log(
+          "[get_diagram_preview:result] session=%s previewId=%s found=%s",
+          extra.sessionId || "none",
+          previewId,
+          preview ? "yes" : "no"
+        );
+      }
 
       if (!preview)
       {
@@ -2393,16 +2417,6 @@ export function createServer(html, options = {})
     { mimeType: RESOURCE_MIME_TYPE },
     async function()
     {
-      if (process.env.MCP_DEBUG_REQUESTS === "1")
-      {
-        console.log(
-          "[ui-resource] uri=%s domain=%s htmlLength=%s",
-          resourceUri,
-          domain || "none",
-          html.length
-        );
-      }
-
       return {
         contents:
         [

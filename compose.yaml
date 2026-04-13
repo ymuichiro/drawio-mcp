@@ -7,7 +7,8 @@ services:
       dockerfile: mcp-app-server/Dockerfile
     environment:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
-      MCP_DEBUG_REQUESTS: ${MCP_DEBUG_REQUESTS:-1}
+      CHATGPT_COMPAT_MODE: ${CHATGPT_COMPAT_MODE:-1}
+      MCP_DEBUG_REQUESTS: ${MCP_DEBUG_REQUESTS:-0}
       NODE_ENV: production
       PORT: "3001"
       LISTEN: 0.0.0.0

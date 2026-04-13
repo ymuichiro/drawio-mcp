@@ -19,6 +19,17 @@ const CORS_HEADERS =
   "Access-Control-Allow-Headers": "Content-Type, mcp-session-id, mcp-protocol-version",
   "Access-Control-Expose-Headers": "mcp-session-id, mcp-protocol-version",
 };
+const SESSION_IDLE_TTL_MS = 10 * 60 * 1000;
+
+function parseBooleanEnv(value)
+{
+  if (typeof value !== "string")
+  {
+    return Boolean(value);
+  }
+
+  return value === "1" || value.toLowerCase() === "true";
+}
 
 /** Add CORS headers to an existing Response. */
 function withCors(response)
@@ -114,7 +125,15 @@ export class MCPSessionManager
         this.log(`[session-create] domain=${this.env.DOMAIN || "UNDEFINED"} session=${sessionId.slice(0, 8)}`);
       }
 
-      const server = createServer(html, { domain: this.env.DOMAIN, xmlReference, shapeIndex });
+      const server = createServer(
+        html,
+        {
+          domain: this.env.DOMAIN,
+          xmlReference,
+          shapeIndex,
+          chatgptCompatMode: parseBooleanEnv(this.env.CHATGPT_COMPAT_MODE),
+        }
+      );
       const transport = new WebStandardStreamableHTTPServerTransport(
       {
         sessionIdGenerator: function() { return sessionId; },
@@ -238,63 +257,16 @@ export class MCPSessionManager
     const status = response ? response.status : "null";
     this.log(`[response] ${request.method} session=${sessionId.slice(0, 8)} mode=${mode} status=${status} elapsed=${elapsed}ms`);
 
-    // Log response body for key methods to debug what Claude.ai sees
-    const debugMethods = ["resources/list", "resources/read", "tools/call", "tools/list"];
-
-    if (this.debug && response && mode === "JSON" && debugMethods.includes(rpcMethod))
-    {
-      try
-      {
-        const respClone = response.clone();
-        const respBody = await respClone.text();
-
-        if (rpcMethod === "resources/list" || rpcMethod === "resources/read")
-        {
-          // Log full response (minus the HTML blob for resources/read)
-          const parsed = JSON.parse(respBody);
-
-          if (parsed.result && parsed.result.contents)
-          {
-            // resources/read — log metadata but truncate the HTML text
-            const summary = parsed.result.contents.map(function(c)
-            {
-              return {
-                uri: c.uri,
-                mimeType: c.mimeType,
-                textLength: c.text ? c.text.length : 0,
-                _meta: c._meta,
-              };
-            });
-            console.log(`[response-body] ${rpcMethod} session=${sessionId.slice(0, 8)} contents=${JSON.stringify(summary)}`);
-          }
-          else
-          {
-            // resources/list — log the full response (small)
-            console.log(`[response-body] ${rpcMethod} session=${sessionId.slice(0, 8)} body=${respBody.slice(0, 2000)}`);
-          }
-        }
-        else
-        {
-          // tools/list, tools/call — truncate at 500 chars
-          console.log(`[response-body] ${rpcMethod} session=${sessionId.slice(0, 8)} body=${respBody.slice(0, 500)}`);
-        }
-      }
-      catch (e)
-      {
-        console.log(`[response-body] ${rpcMethod} parse-failed session=${sessionId.slice(0, 8)} error=${e.message}`);
-      }
-    }
-
     return withCors(response);
   }
 
   /**
-   * Remove sessions that haven't been accessed in the last 5 minutes.
+   * Remove sessions that haven't been accessed in the last 10 minutes.
    */
   cleanupStaleSessions()
   {
     const now = Date.now();
-    const STALE_TIMEOUT = 5 * 60 * 1000;
+    const STALE_TIMEOUT = SESSION_IDLE_TTL_MS;
     let cleaned = 0;
     const removedIds = [];
 

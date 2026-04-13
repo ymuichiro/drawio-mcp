@@ -11,7 +11,7 @@ import { buildHtml, processAppBundle, createServer } from "./shared.js";
 import { DiagramPreviewRenderer } from "./preview-renderer.js";
 import { DiagramPreviewStore } from "./preview-store.js";
 
-const SESSION_IDLE_TTL_MS = 5 * 60 * 1000;
+const SESSION_IDLE_TTL_MS = 10 * 60 * 1000;
 
 // Read the browser bundles once at startup and inline them into the HTML
 const extAppsEntry = fileURLToPath(import.meta.resolve("@modelcontextprotocol/ext-apps/app-with-deps"));
@@ -63,6 +63,16 @@ if (shapeIndexPath)
 
 const html = buildHtml(appWithDepsJs, pakoDeflateJs);
 
+function parseBooleanEnv(value)
+{
+  if (typeof value !== "string")
+  {
+    return Boolean(value);
+  }
+
+  return value === "1" || value.toLowerCase() === "true";
+}
+
 function parseAllowedHosts(value)
 {
   if (!value)
@@ -90,11 +100,27 @@ function getSessionIdHeader(req)
   return Array.isArray(sessionId) ? sessionId[0] : sessionId;
 }
 
+function summarizeRpcRequest(body)
+{
+  if (!body || typeof body !== "object")
+  {
+    return "unknown";
+  }
+
+  if (body.method === "tools/call")
+  {
+    return "tools/call:" + (body.params && body.params.name ? body.params.name : "unknown");
+  }
+
+  return body.method || "unknown";
+}
+
 async function startStreamableHTTPServer()
 {
   const port = parseInt(process.env.PORT ?? "3001", 10);
   const host = process.env.LISTEN ?? "127.0.0.1";
   const allowedHosts = parseAllowedHosts(process.env.ALLOWED_HOSTS);
+  const chatgptCompatMode = parseBooleanEnv(process.env.CHATGPT_COMPAT_MODE);
   const previewService = new DiagramPreviewStore(
   {
     renderer: new DiagramPreviewRenderer({ viewerScriptPath }),
@@ -159,6 +185,7 @@ async function startStreamableHTTPServer()
         xmlReference,
         shapeIndex,
         previewService,
+        chatgptCompatMode,
       }
     );
     let transport;
@@ -174,6 +201,11 @@ async function startStreamableHTTPServer()
           transport,
           lastAccess: Date.now(),
         });
+
+        if (process.env.MCP_DEBUG_REQUESTS === "1")
+        {
+          console.log("[session:init] session=%s", sessionId);
+        }
       },
     });
 
@@ -181,6 +213,11 @@ async function startStreamableHTTPServer()
     {
       if (transport.sessionId)
       {
+        if (process.env.MCP_DEBUG_REQUESTS === "1")
+        {
+          console.log("[session:close] session=%s", transport.sessionId);
+        }
+
         deleteSession(transport.sessionId, false).catch(function() {});
       }
     };
@@ -192,10 +229,21 @@ async function startStreamableHTTPServer()
   async function handleMcpRequest(req, res)
   {
     const sessionId = getSessionIdHeader(req);
+    const rpcSummary = summarizeRpcRequest(req.body);
 
     try
     {
       await cleanupStaleSessions();
+
+      if (process.env.MCP_DEBUG_REQUESTS === "1")
+      {
+        console.log(
+          "[mcp:req] http=%s rpc=%s session=%s",
+          req.method,
+          rpcSummary,
+          sessionId || "none"
+        );
+      }
 
       if (sessionId)
       {
@@ -203,6 +251,11 @@ async function startStreamableHTTPServer()
 
         if (!session)
         {
+          if (process.env.MCP_DEBUG_REQUESTS === "1")
+          {
+            console.warn("[mcp:missing-session] rpc=%s session=%s", rpcSummary, sessionId);
+          }
+
           res.status(404).json(
           {
             jsonrpc: "2.0",
@@ -221,6 +274,11 @@ async function startStreamableHTTPServer()
       {
         await createSession(req, res);
         return;
+      }
+
+      if (process.env.MCP_DEBUG_REQUESTS === "1")
+      {
+        console.warn("[mcp:bad-request] rpc=%s session=%s", rpcSummary, sessionId || "none");
       }
 
       res.status(400).json(
@@ -253,6 +311,7 @@ async function startStreamableHTTPServer()
   const httpServer = app.listen(port, function()
   {
     console.log(`MCP App server listening on http://${host}:${port}/mcp`);
+    console.log("ChatGPT compatibility mode: " + (chatgptCompatMode ? "enabled" : "disabled"));
   });
 
   const shutdown = async function()
@@ -275,12 +334,15 @@ async function startStreamableHTTPServer()
 
 async function startStdioServer()
 {
+  const chatgptCompatMode = parseBooleanEnv(process.env.CHATGPT_COMPAT_MODE);
+
   await createServer(
     html,
     {
       domain: process.env.DOMAIN,
       xmlReference,
       shapeIndex,
+      chatgptCompatMode,
     }
   ).connect(new StdioServerTransport());
 }
