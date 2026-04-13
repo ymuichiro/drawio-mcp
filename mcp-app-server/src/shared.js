@@ -252,6 +252,75 @@ function showError(message)
   errorEl.textContent = message;
 }
 
+function sanitizePreviewText(value)
+{
+  var preview = typeof value === "string" ? value : JSON.stringify(value);
+
+  if (typeof preview !== "string")
+  {
+    preview = String(preview);
+  }
+
+  preview = preview.replace(/\s+/g, " ").trim();
+
+  if (preview.length > 120)
+  {
+    preview = preview.substring(0, 120) + "...";
+  }
+
+  return preview;
+}
+
+function collectToolResultDiagnostics(result)
+{
+  var contentBlocks = Array.isArray(result.content) ? result.content : [];
+  var blockTypes = contentBlocks.length > 0
+    ? contentBlocks.map(function(block) { return block.type || typeof block; }).join(", ")
+    : "none";
+  var textPreviews = [];
+
+  for (var i = 0; i < contentBlocks.length; i++)
+  {
+    var block = contentBlocks[i];
+
+    if (typeof block === "string")
+    {
+      textPreviews.push(sanitizePreviewText(block));
+    }
+    else if (block && typeof block.text === "string")
+    {
+      textPreviews.push(sanitizePreviewText(block.text));
+    }
+
+    if (textPreviews.length >= 3)
+    {
+      break;
+    }
+  }
+
+  var structuredPreview = result.structuredContent === undefined
+    ? "none"
+    : sanitizePreviewText(result.structuredContent);
+
+  return {
+    blockTypes: blockTypes,
+    textPreviews: textPreviews,
+    structuredPreview: structuredPreview,
+  };
+}
+
+function extractDiagramXmlFromToolResult(result)
+{
+  if (!result || typeof result !== "object")
+  {
+    return null;
+  }
+
+  return normalizeDiagramXml(result.content) ||
+    normalizeDiagramXml(result.structuredContent) ||
+    normalizeDiagramXml(result);
+}
+
 function waitForGraphViewer()
 {
   return new Promise(function(resolve, reject)
@@ -1304,6 +1373,7 @@ app.ontoolinput = function(params)
 
 app.ontoolresult = function(result)
 {
+  var diagnostics = collectToolResultDiagnostics(result);
   var textBlock = result.content && result.content.find(function(c) { return c.type === "text"; });
 
   endStreaming();
@@ -1311,33 +1381,29 @@ app.ontoolresult = function(result)
   if (result.isError)
   {
     var errorMsg = (textBlock && textBlock.text) ? textBlock.text : "Unknown error";
+    console.warn("[drawio-mcp] tool error", diagnostics);
     showError("Tool error: " + errorMsg);
     return;
   }
 
-  if (textBlock && textBlock.type === "text")
-  {
-    var normalizedXml = normalizeDiagramXml(textBlock.text);
+  var normalizedXml = extractDiagramXmlFromToolResult(result);
 
-    if (normalizedXml)
+  if (normalizedXml)
+  {
+    renderDiagram(normalizedXml).catch(function(e)
     {
-      renderDiagram(normalizedXml).catch(function(e)
-      {
-        showError("Failed to render diagram: " + e.message);
-      });
-    }
-    else
-    {
-      var inputPreview = textBlock.text.substring(0, 200);
-      showError(invalidDiagramXmlMessage + "\\n\\nReceived (first 200 chars): " + inputPreview);
-    }
+      showError("Failed to render diagram: " + e.message);
+    });
   }
   else
   {
-    var blockTypes = result.content
-      ? result.content.map(function(c) { return c.type; }).join(", ")
-      : "none";
-    showError(invalidDiagramXmlMessage + "\\n\\nContent block types: " + blockTypes);
+    console.warn("[drawio-mcp] invalid tool result", diagnostics);
+    showError(
+      invalidDiagramXmlMessage +
+      "\\n\\nContent block types: " + diagnostics.blockTypes +
+      "\\nText previews: " + (diagnostics.textPreviews.length > 0 ? diagnostics.textPreviews.join(" | ") : "none") +
+      "\\nStructured preview: " + diagnostics.structuredPreview
+    );
   }
 };
 
@@ -1951,6 +2017,50 @@ export function createServer(html, options = {})
 
   const resourceUri = "ui://drawio/mcp-app.html";
 
+  function summarizeBlocksForLog(content)
+  {
+    if (!Array.isArray(content) || content.length === 0)
+    {
+      return { blockTypes: "none", textPreview: "none" };
+    }
+
+    var blockTypes = content.map(function(block)
+    {
+      return block && block.type ? block.type : typeof block;
+    }).join(",");
+    var previews = [];
+
+    for (var i = 0; i < content.length; i++)
+    {
+      var block = content[i];
+      var textValue = null;
+
+      if (typeof block === "string")
+      {
+        textValue = block;
+      }
+      else if (block && typeof block.text === "string")
+      {
+        textValue = block.text;
+      }
+
+      if (textValue)
+      {
+        previews.push(describeDiagramXmlInput(textValue).preview);
+      }
+
+      if (previews.length >= 2)
+      {
+        break;
+      }
+    }
+
+    return {
+      blockTypes: blockTypes,
+      textPreview: previews.length > 0 ? previews.join(" | ") : "none",
+    };
+  }
+
   registerAppTool(
     server,
     "create_diagram",
@@ -2045,6 +2155,18 @@ export function createServer(html, options = {})
       if (previewService && extra.sessionId)
       {
         previewMetadata = await previewService.createPreview(extra.sessionId, normalizedXml);
+      }
+
+      if (process.env.MCP_DEBUG_REQUESTS === "1")
+      {
+        var outputDiagnostics = summarizeBlocksForLog(content);
+        console.log(
+          "[create_diagram:result] session=%s blockTypes=%s previewId=%s textPreview=%s",
+          extra.sessionId || "none",
+          outputDiagnostics.blockTypes,
+          previewMetadata ? "yes" : "no",
+          outputDiagnostics.textPreview
+        );
       }
 
       return {
