@@ -10,7 +10,7 @@
 
 import { createServer } from "./shared.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { html, xmlReference, shapeIndex } from "./generated-html.js";
+import { html, xmlReference, shapeIndex, faviconBase64 } from "./generated-html.js";
 
 const CORS_HEADERS =
 {
@@ -351,9 +351,19 @@ export default
     const url = new URL(request.url);
 
     // Serve favicon so Google's favicon service picks up the draw.io logo
-    if (url.pathname === "/favicon.ico")
+    if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.png")
     {
-      return Response.redirect("https://draw.io/favicon.ico", 301);
+      const bytes = Uint8Array.from(atob(faviconBase64), function(c) { return c.charCodeAt(0); });
+
+      return new Response(bytes,
+      {
+        headers:
+        {
+          "Content-Type": "image/png",
+          "Cache-Control": "public, max-age=604800",
+          ...CORS_HEADERS,
+        },
+      });
     }
 
     // Only serve /mcp

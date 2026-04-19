@@ -9,8 +9,13 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
+import { createRequire } from "module";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const repoPostprocessPath = join(__dirname, "..", "..", "postprocessor", "postprocess.js");
+const localPostprocessPath = join(__dirname, "postprocessor", "postprocess.js");
+const postprocessModule = require(existsSync(repoPostprocessPath) ? repoPostprocessPath : localPostprocessPath);
 const DRAWIO_BASE_URL = "https://app.diagrams.net/";
 
 // Read the shared XML reference once at startup (single source of truth).
@@ -20,6 +25,15 @@ const sharedPath = join(__dirname, "..", "..", "shared", "xml-reference.md");
 const localPath = join(__dirname, "xml-reference.md");
 const xmlReference = readFileSync(
   existsSync(sharedPath) ? sharedPath : localPath,
+  "utf-8"
+);
+
+// Same dual-path lookup for the Mermaid reference. In packaged form the
+// prepack script copies it into src/ alongside xml-reference.md.
+const sharedMermaidPath = join(__dirname, "..", "..", "shared", "mermaid-reference.md");
+const localMermaidPath = join(__dirname, "mermaid-reference.md");
+const mermaidReference = readFileSync(
+  existsSync(sharedMermaidPath) ? sharedMermaidPath : localMermaidPath,
   "utf-8"
 );
 
@@ -198,7 +212,8 @@ const tools =
     description:
       "Opens the draw.io editor with a diagram generated from Mermaid.js syntax. " +
       "Supports flowcharts, sequence diagrams, class diagrams, state diagrams, " +
-      "entity relationship diagrams, and more using Mermaid.js syntax.",
+      "entity relationship diagrams, and more using Mermaid.js syntax.\n\n" +
+      mermaidReference,
     inputSchema:
     {
       type: "object",
@@ -302,6 +317,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) =>
     {
       case "open_drawio_xml":
         type = "xml";
+
+        // Post-process XML — xmldom normalization only (repairs
+        // malformed AI markup so mxCodec can decode it). Edge routing
+        // is handled by the draw.io editor itself.
+        try
+        {
+          content = (await postprocessModule.postprocess(content)).xml;
+        }
+        catch (e)
+        {
+          // Use original XML on failure
+        }
+
         break;
       case "open_drawio_csv":
         type = "csv";

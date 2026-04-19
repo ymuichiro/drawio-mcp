@@ -38,6 +38,10 @@ You can also run the server locally via Node.js, Docker, or deploy your own inst
 - **`create_diagram`** — Renders draw.io XML as an interactive diagram inline in chat
 - **`search_shapes`** — Searches 10,000+ shapes across all draw.io libraries (AWS, Azure, GCP, P&ID, electrical, Cisco, Kubernetes, UML, BPMN, etc.) by keyword. Returns exact style strings that can be used directly in XML. Use this to find the correct shape before calling `create_diagram`.
 
+**Tools:**
+- **`create_diagram`** — Renders draw.io XML as an interactive diagram inline in chat
+- **`search_shapes`** — Searches 10,000+ shapes across all draw.io libraries (AWS, Azure, GCP, P&ID, electrical, Cisco, Kubernetes, UML, BPMN, etc.) by keyword. Returns exact style strings that can be used directly in XML. Use this to find the correct shape before calling `create_diagram`.
+
 **[Full documentation →](mcp-app-server/README.md)**
 
 > **Note:** Inline diagram rendering requires an MCP host that supports the MCP Apps extension. In hosts without MCP Apps support, the tool still works but returns the XML as text.
